@@ -1,0 +1,9 @@
+services:
+  agent:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file: .env
+    restart: unless-stopped
+    # Si tu Postgres corre en otro contenedor del mismo host:
+    # network_mode: host
