@@ -1,3 +1,4 @@
+import json
 import asyncpg
 from typing import Optional
 from app.config import settings
@@ -17,6 +18,23 @@ async def close_pool():
     if _pool:
         await _pool.close()
         _pool = None
+
+
+def _to_dict(value) -> dict:
+    """Safely convert asyncpg JSONB value to dict (may come as str or dict)."""
+    if not value:
+        return {}
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return {}
+    if isinstance(value, dict):
+        return value
+    try:
+        return dict(value)
+    except Exception:
+        return {}
 
 
 def _extract_text(message: dict, message_type: str) -> str:
@@ -52,7 +70,7 @@ async def get_agent_messages(limit: int = 200) -> list[str]:
     )
     texts = []
     for row in rows:
-        text = _extract_text(dict(row["message"]) if row["message"] else {}, row["messageType"])
+        text = _extract_text(_to_dict(row["message"]), row["messageType"])
         if text.strip():
             texts.append(text.strip())
     return texts
@@ -81,9 +99,9 @@ async def get_chat_history(remote_jid: str, limit: int = 15) -> list[dict]:
     )
     messages = []
     for row in reversed(rows):  # chronological order
-        key = dict(row["key"]) if row["key"] else {}
+        key = _to_dict(row["key"])
         from_me = key.get("fromMe", False)
-        text = _extract_text(dict(row["message"]) if row["message"] else {}, row["messageType"])
+        text = _extract_text(_to_dict(row["message"]), row["messageType"])
         if text.strip():
             messages.append({
                 "role": "assistant" if from_me else "user",
