@@ -29,6 +29,16 @@ async def send_text(to: str, text: str) -> bool:
             return False
 
 
+def _is_from_me(key: dict) -> bool:
+    """Robust fromMe check — handles bool True, string 'true', int 1."""
+    val = key.get("fromMe", False)
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() == "true"
+    return bool(val)
+
+
 def parse_incoming(payload: dict) -> dict | None:
     """
     Parse an Evolution API webhook payload.
@@ -40,9 +50,12 @@ def parse_incoming(payload: dict) -> dict | None:
 
     data = payload.get("data", {})
     key = data.get("key", {})
+    if not isinstance(key, dict):
+        return None
 
-    # Skip messages sent by us
-    if key.get("fromMe", False):
+    # Skip messages sent by us — bulletproof check
+    if _is_from_me(key):
+        logger.debug("Ignoring fromMe message")
         return None
 
     remote_jid: str = key.get("remoteJid", "")
@@ -54,6 +67,8 @@ def parse_incoming(payload: dict) -> dict | None:
         return None
 
     message = data.get("message", {})
+    if not isinstance(message, dict):
+        return None
     message_type = data.get("messageType", "")
 
     if message_type == "conversation":
@@ -61,7 +76,7 @@ def parse_incoming(payload: dict) -> dict | None:
     elif message_type == "extendedTextMessage":
         text = message.get("extendedTextMessage", {}).get("text", "")
     else:
-        return None  # not a text message (image, audio, etc.)
+        return None
 
     text = text.strip()
     if not text:
