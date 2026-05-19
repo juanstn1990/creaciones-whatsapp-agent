@@ -44,7 +44,12 @@ def _verify_signature(body: bytes, signature: str) -> bool:
 async def _handle_message(remote_jid: str, text: str, push_name: str):
     try:
         reply = await get_reply(remote_jid, text, push_name)
-        await send_text(remote_jid, reply)
+        # Split into multiple messages if the agent used the ||| separator
+        parts = [p.strip() for p in reply.split("|||") if p.strip()]
+        for part in parts:
+            await send_text(remote_jid, part)
+            if len(parts) > 1:
+                await asyncio.sleep(1.5)  # small pause between messages
     except Exception as exc:
         logger.error("Error handling message from %s: %s", remote_jid, exc)
 
