@@ -93,6 +93,16 @@ async def webhook(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
+    # Debug: log key fields to understand fromMe format
+    try:
+        data = payload.get("data", {})
+        key = data.get("key", {})
+        logger.info("WEBHOOK event=%s fromMe=%r type=%s jid=%s",
+                    payload.get("event"), key.get("fromMe"), type(key.get("fromMe")).__name__,
+                    key.get("remoteJid", "")[:20])
+    except Exception:
+        pass
+
     incoming = parse_incoming(payload)
     if incoming is None:
         return JSONResponse({"status": "ignored"})
