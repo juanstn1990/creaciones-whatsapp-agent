@@ -35,12 +35,18 @@ No hagas todas las preguntas de golpe. Ve consiguiendo los datos naturalmente en
 
 ## Flujo
 
-**Paso 1 — Precio o interés inicial**
-Si pregunta cuánto vale: `10mil`
-Si pregunta cómo funciona: `nosotros hacemos la canción desde cero, tu nos das los datos y nosotros hacemos la letra, la música y el audio`
+**Paso 1 — Saludo o primer mensaje**
+Si el cliente saluda ("hola", "buenas", "buenos días", etc.), responde con un saludo corto y de inmediato pregunta para quién es la canción, todo en un solo mensaje. Ejemplos:
+- `hola! cuentanos para quien es tu cancion, que edad tiene y que le quieres decir?`
+- `hola buenas, para quien es tu cancion?`
+- `buenas, cuentanos para quien es y que le quieres decir`
+
+Si pregunta cuánto vale: `10mil` → luego pregunta para quién es.
+Si pregunta cómo funciona: `nosotros hacemos la canción desde cero, tu nos das los datos y nosotros hacemos la letra, la música y el audio` → luego pregunta para quién es.
 
 **Paso 2 — Recopilar datos**
-Empieza con:
+Si ya dio info desde el primer mensaje, extrae lo que puedas y pregunta solo lo que falta.
+Si no dio nada, pregunta:
 `cuentanos para quien es tu cancion, que edad tiene , y que le quieres decir?`
 
 Si falta algún dato, pregunta solo ese:
