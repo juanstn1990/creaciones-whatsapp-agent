@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import hmac
 import hashlib
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 
 from app.config import settings
@@ -13,6 +14,10 @@ from app.agent import get_reply, load_system_prompt
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+# debounce state: remote_jid → {task, messages, push_name}
+_pending: dict[str, dict] = {}
+DEBOUNCE_SECONDS = 40
 
 
 @asynccontextmanager
@@ -28,7 +33,6 @@ app = FastAPI(title="WhatsApp AI Agent", lifespan=lifespan)
 
 
 def _verify_signature(body: bytes, signature: str) -> bool:
-    """Optional HMAC verification for Evolution API webhooks."""
     if not settings.webhook_secret:
         return True
     expected = hmac.new(
@@ -38,7 +42,6 @@ def _verify_signature(body: bytes, signature: str) -> bool:
 
 
 async def _handle_message(remote_jid: str, text: str, push_name: str):
-    """Background task: generate reply and send it via Evolution API."""
     try:
         reply = await get_reply(remote_jid, text, push_name)
         await send_text(remote_jid, reply)
@@ -46,11 +49,36 @@ async def _handle_message(remote_jid: str, text: str, push_name: str):
         logger.error("Error handling message from %s: %s", remote_jid, exc)
 
 
+async def _debounced_process(remote_jid: str):
+    """Wait DEBOUNCE_SECONDS then process all accumulated messages as one."""
+    await asyncio.sleep(DEBOUNCE_SECONDS)
+    entry = _pending.pop(remote_jid, None)
+    if not entry or not entry["messages"]:
+        return
+    combined = "\n".join(entry["messages"])
+    count = len(entry["messages"])
+    logger.info("Processing %d message(s) from %s", count, remote_jid)
+    await _handle_message(remote_jid, combined, entry["push_name"])
+
+
+def _schedule(remote_jid: str, text: str, push_name: str):
+    """Add message to pending queue, reset the 40s timer."""
+    if remote_jid in _pending:
+        _pending[remote_jid]["task"].cancel()
+        _pending[remote_jid]["messages"].append(text)
+        logger.info("Debounce reset for %s (%d msgs)", remote_jid, len(_pending[remote_jid]["messages"]))
+    else:
+        _pending[remote_jid] = {"messages": [text], "push_name": push_name}
+        logger.info("Debounce started for %s", remote_jid)
+
+    task = asyncio.create_task(_debounced_process(remote_jid))
+    _pending[remote_jid]["task"] = task
+
+
 @app.post("/webhook")
-async def webhook(request: Request, background_tasks: BackgroundTasks):
+async def webhook(request: Request):
     body = await request.body()
 
-    # Optional signature check
     sig = request.headers.get("x-hub-signature-256", "")
     if not _verify_signature(body, sig):
         raise HTTPException(status_code=401, detail="Invalid signature")
@@ -62,15 +90,9 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
     incoming = parse_incoming(payload)
     if incoming is None:
-        # Not a relevant message — ACK and ignore
         return JSONResponse({"status": "ignored"})
 
-    background_tasks.add_task(
-        _handle_message,
-        incoming["remote_jid"],
-        incoming["text"],
-        incoming["push_name"],
-    )
+    _schedule(incoming["remote_jid"], incoming["text"], incoming["push_name"])
     return JSONResponse({"status": "queued"})
 
 
@@ -81,5 +103,4 @@ async def health():
 
 @app.get("/admin/prompt")
 async def show_prompt():
-    """Show the current system prompt."""
     return {"prompt": load_system_prompt()}
