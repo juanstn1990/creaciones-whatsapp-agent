@@ -11,12 +11,16 @@ _HEADERS = {
     "Content-Type": "application/json",
 }
 
-# Store IDs of messages we sent so we can filter our own webhook events
-_sent_ids: deque = deque(maxlen=200)
+# Register texts we are about to send so we can filter our own webhook events.
+# We add the text BEFORE the HTTP call to avoid race conditions.
+_sent_texts: deque = deque(maxlen=200)
 
 
 async def send_text(to: str, text: str) -> bool:
     """Send a text message via Evolution API. Returns True on success."""
+    # Register BEFORE sending — Evolution API webhook can arrive faster than our HTTP response
+    _sent_texts.append(text.strip())
+
     url = f"{settings.evolution_api_url.rstrip('/')}/message/sendText/{settings.evolution_instance}"
     payload = {"number": to, "text": text}
 
@@ -24,12 +28,6 @@ async def send_text(to: str, text: str) -> bool:
         try:
             resp = await client.post(url, json=payload, headers=_HEADERS)
             resp.raise_for_status()
-            # Store the sent message ID so we can ignore its webhook event
-            data = resp.json()
-            msg_id = (data.get("key") or {}).get("id") or data.get("id", "")
-            if msg_id:
-                _sent_ids.append(msg_id)
-                logger.debug("Sent message id=%s", msg_id)
             return True
         except httpx.HTTPStatusError as exc:
             logger.error("Evolution API error %s: %s", exc.response.status_code, exc.response.text)
@@ -53,25 +51,18 @@ def parse_incoming(payload: dict) -> dict | None:
     if not isinstance(key, dict):
         return None
 
-    # Primary filter: skip by tracked sent message IDs (most reliable)
-    msg_id = key.get("id", "")
-    if msg_id and msg_id in _sent_ids:
-        logger.debug("Ignoring own message id=%s", msg_id)
-        return None
-
-    # Secondary filter: fromMe field (handles bool, string, int)
+    # Filter by fromMe field (bool, string, or int)
     from_me = key.get("fromMe", False)
     if isinstance(from_me, str):
         from_me = from_me.lower() == "true"
     if from_me:
-        logger.debug("Ignoring fromMe message id=%s", msg_id)
+        logger.debug("Ignoring fromMe message")
         return None
 
     remote_jid: str = key.get("remoteJid", "")
     if not remote_jid:
         return None
 
-    # Skip group chats if configured
     if settings.ignore_groups and "@g.us" in remote_jid:
         return None
 
@@ -89,6 +80,11 @@ def parse_incoming(payload: dict) -> dict | None:
 
     text = text.strip()
     if not text:
+        return None
+
+    # Filter our own messages by text match (catches race condition with fromMe)
+    if text in _sent_texts:
+        logger.debug("Ignoring own message (text match): %.40s", text)
         return None
 
     return {
