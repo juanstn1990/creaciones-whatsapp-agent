@@ -9,7 +9,17 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db import get_pool, close_pool
-from app.evolution import parse_incoming, send_text
+from app.evolution import parse_incoming, send_text, assign_label
+
+LABEL_ASESOR = "15"  # asesor label ID in pruebas instance
+
+# Phrases that indicate the bot completed the order or is confused
+_ORDER_DONE_PHRASE = "ya la estamos musicalizando"
+_CONFUSED_PHRASES = (
+    "no te entendí",
+    "no entendí",
+    "hay interferencia",
+)
 from app.agent import get_reply, load_system_prompt
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -75,6 +85,12 @@ async def _handle_message(remote_jid: str, text: str, push_name: str):
             await send_text(remote_jid, part)
             if len(parts) > 1:
                 await asyncio.sleep(1.5)
+
+        reply_lower = reply.lower()
+        # Assign asesor label when order is done or bot is confused
+        if _ORDER_DONE_PHRASE in reply_lower or any(p in reply_lower for p in _CONFUSED_PHRASES):
+            await assign_label(remote_jid, LABEL_ASESOR)
+
     except Exception as exc:
         logger.error("Error handling message from %s: %s", remote_jid, exc)
 

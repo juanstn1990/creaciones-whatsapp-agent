@@ -16,6 +16,25 @@ _HEADERS = {
 _sent_texts: deque = deque(maxlen=200)
 
 
+async def assign_label(remote_jid: str, label_id: str) -> bool:
+    """Assign a label to a chat in Evolution API."""
+    number = remote_jid.split("@")[0]
+    url = f"{settings.evolution_api_url.rstrip('/')}/label/handleLabel/{settings.evolution_instance}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.post(
+                url,
+                json={"number": number, "labelId": label_id, "action": "add"},
+                headers=_HEADERS,
+            )
+            resp.raise_for_status()
+            logger.info("Label %s assigned to %s", label_id, remote_jid)
+            return True
+        except Exception as exc:
+            logger.error("Failed to assign label %s to %s: %s", label_id, remote_jid, exc)
+            return False
+
+
 async def send_text(to: str, text: str) -> bool:
     """Send a text message via Evolution API. Returns True on success."""
     # Register BEFORE sending — Evolution API webhook can arrive faster than our HTTP response
