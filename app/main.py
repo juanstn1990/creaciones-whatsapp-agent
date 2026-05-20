@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.db import get_pool, close_pool, get_chat_history
+from app.db import get_pool, close_pool
 from app.evolution import parse_incoming, send_text
 from app.agent import get_reply, load_system_prompt
 
