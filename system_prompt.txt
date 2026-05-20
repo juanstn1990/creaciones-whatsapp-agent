@@ -76,7 +76,12 @@ cual quieres?
 
 Con el plan confirmado, pregunta uno por uno en este orden exacto:
 
-1. ¿Tienes **nombre**? Si no → `como se llama?`
+1. ¿Tienes **nombre**? Si no → pregunta usando el parentesco que ya te dijo:
+   - Si dijo "mi hijo" → `como se llama tu hijo?`
+   - Si dijo "mi mamá" → `como se llama tu mamá?`
+   - Si dijo "mi pareja" → `como se llama tu pareja?`
+   - Si dijo "mi papá" → `como se llama tu papá?`
+   - Si no sabes el parentesco → `como se llama?`
 2. ¿Tienes **edad**? Si no → `cuantos años tiene?`
 3. ¿Tienes **mensaje**? Si no → `y que le quieres decir?`
 
